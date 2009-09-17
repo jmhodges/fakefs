@@ -24,6 +24,30 @@ With FakeFS:
 
 Woot.
 
+
+Usage
+-----
+
+    require 'fakefs'
+
+    # That's it.
+
+
+Don't Fake the FS Immediately
+-----------------------------
+
+    require 'fakefs/safe'
+    
+    FakeFS.activate!
+    # your code
+    FakeFS.deactivate!
+    
+    # or
+    FakeFS do
+      # your code
+    end
+
+
 How is this different than MockFS?
 ----------------------------------
 
@@ -31,7 +55,14 @@ FakeFS provides a test suite and works with symlinks. It's also strictly a
 test-time dependency: your actual library does not need to use or know about
 FakeFS.
 
+
+Speed?
+------
+http://gist.github.com/156091
+
+
 Authors
 -------
 
-Chris Wanstrath [chris@ozmm.org]
+* Chris Wanstrath [chris@ozmm.org]
+* Pat Nakajima [http://github.com/nakajima]

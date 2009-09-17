@@ -23,7 +23,7 @@ class FakeFSTest < Test::Unit::TestCase
 
   def test_can_create_directories
     FileUtils.mkdir_p("/path/to/dir")
-    assert_kind_of MockDir, FileSystem.fs['path']['to']['dir']
+    assert_kind_of FakeDir, FileSystem.fs['path']['to']['dir']
   end
 
   def test_knows_directories_exist
@@ -57,7 +57,7 @@ class FakeFSTest < Test::Unit::TestCase
   def test_can_create_symlinks
     FileUtils.mkdir_p(target = "/path/to/target")
     FileUtils.ln_s(target, "/path/to/link")
-    assert_kind_of MockSymlink, FileSystem.fs['path']['to']['link']
+    assert_kind_of FakeSymlink, FileSystem.fs['path']['to']['link']
 
     assert_raises(Errno::EEXIST) {
       FileUtils.ln_s(target, '/path/to/link')
@@ -94,14 +94,32 @@ class FakeFSTest < Test::Unit::TestCase
     assert_equal "Yatta!", File.read(path)
   end
 
+  def test_can_write_to_files
+    path = '/path/to/file.txt'
+    File.open(path, 'w') do |f|
+      f << 'Yada Yada'
+    end
+    assert_equal 'Yada Yada', File.read(path)
+  end
+
   def test_can_read_with_File_readlines
     path = '/path/to/file.txt'
     File.open(path, 'w') do |f|
-      f.puts "Yatta!"
-      f.puts "woot"
+      f.puts "Yatta!", "Gatta!"
+      f.puts ["woot","toot"]
     end
 
-    assert_equal ["Yatta!", "woot"], File.readlines(path)
+    assert_equal %w(Yatta! Gatta! woot toot), File.readlines(path)
+  end
+
+  def test_File_close_disallows_further_access
+    path = '/path/to/file.txt'
+    file = File.open(path, 'w')
+    file.write 'Yada'
+    file.close
+    assert_raise IOError do
+      file.read
+    end
   end
 
   def test_can_read_from_file_objects
@@ -175,10 +193,32 @@ class FakeFSTest < Test::Unit::TestCase
     FileUtils.mkdir_p '/path'
     File.open('/path/foo', 'w'){|f| f.write 'foo' }
     File.open('/path/foobar', 'w'){|f| f.write 'foo' }
+
+    FileUtils.mkdir_p '/path/bar'
+    File.open('/path/bar/baz', 'w'){|f| f.write 'foo' }
+
+    FileUtils.cp_r '/path/bar', '/path/bar2'
+
     assert_equal  ['/path'], Dir['/path']
-    assert_equal ['/path/foo', '/path/foobar'], Dir['/path/*']
-    # Unsupported so far. More hackery than I want to work on right now
-    # assert_equal ['/path'], Dir['/path*']
+    assert_equal %w( /path/bar /path/bar2 /path/foo /path/foobar ), Dir['/path/*']
+
+    assert_equal ['/path/bar/baz'], Dir['/path/bar/*']
+    assert_equal ['/path/foo'], Dir['/path/foo']
+
+    assert_equal ['/path'], Dir['/path*']
+    assert_equal ['/path/foo', '/path/foobar'], Dir['/p*h/foo*']
+    assert_equal ['/path/foo', '/path/foobar'], Dir['/p??h/foo*']
+
+    FileUtils.cp_r '/path', '/otherpath'
+
+    assert_equal %w( /otherpath/foo /otherpath/foobar /path/foo /path/foobar ), Dir['/*/foo*']
+  end
+
+  def test_dir_glob_handles_root
+    FileUtils.mkdir_p '/path'
+
+    # this fails. the root dir should be named '/' but it is '.'
+    #assert_equal ['/'], Dir['/']
   end
 
   def test_chdir_changes_directories_like_a_boss
@@ -283,6 +323,20 @@ class FakeFSTest < Test::Unit::TestCase
     end
 
     assert_equal ['foo'], FileSystem.current_dir.keys
+  end
+
+  def test_current_dir_reflected_by_pwd
+    FileUtils.mkdir_p '/path'
+    Dir.chdir('/path')
+
+    assert_equal '/path', Dir.pwd
+    assert_equal '/path', Dir.getwd
+
+    FileUtils.mkdir_p 'subdir'
+    Dir.chdir('subdir')
+
+    assert_equal '/path/subdir', Dir.pwd
+    assert_equal '/path/subdir', Dir.getwd
   end
 
   def test_file_open_defaults_to_read
@@ -395,6 +449,18 @@ class FakeFSTest < Test::Unit::TestCase
     assert_equal 'footext', File.open('symdir/subdir/foo'){|f| f.read }
   end
 
+  def test_cp_r_sets_parent_correctly
+    FileUtils.mkdir_p '/path/foo'
+    File.open('/path/foo/bar', 'w'){|f| f.write 'foo' }
+    File.open('/path/foo/baz', 'w'){|f| f.write 'foo' }
+
+    FileUtils.cp_r '/path/foo', '/path/bar'
+
+    assert File.exists?('/path/bar/baz')
+    FileUtils.rm_rf '/path/bar/baz'
+    assert_equal %w( /path/bar/bar ), Dir['/path/bar/*']
+  end
+
   def test_clone_clones_normal_files
     RealFile.open(here('foo'), 'w'){|f| f.write 'bar' }
     assert !File.exists?(here('foo'))
@@ -444,6 +510,26 @@ class FakeFSTest < Test::Unit::TestCase
     File.open('subdir/nother','w'){|f| f.write 'works' }
     FileUtils.ln_s 'subdir', 'new'
     assert_equal 'works', File.open('new/nother'){|f| f.read }
+  end
+
+  def test_files_can_be_touched
+    FileUtils.touch('touched_file')
+    assert File.exists?('touched_file')
+    list = ['newfile', 'another']
+    FileUtils.touch(list)
+    list.each { |fp| assert(File.exists?(fp)) }
+  end
+
+  def test_touch_does_not_work_if_the_dir_path_cannot_be_found
+    assert_raises(Errno::ENOENT) {
+      FileUtils.touch('this/path/should/not/be/here')
+    }
+    FileUtils.mkdir_p('subdir')
+    list = ['subdir/foo', 'nosubdir/bar']
+
+    assert_raises(Errno::ENOENT) {
+      FileUtils.touch(list)
+    }
   end
 
   def here(fname)
