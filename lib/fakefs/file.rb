@@ -1,6 +1,10 @@
 module FakeFS
   class File
     PATH_SEPARATOR = '/'
+    (RealFile.constants - ["PATH_SEPARATOR"]).map{|c| [c, RealFile.const_get(c)]}.
+      reject{|c,val| val.is_a?(Module)}.each do |name, val|
+      const_set(name, val)
+    end
 
     def self.join(*parts)
       parts * PATH_SEPARATOR

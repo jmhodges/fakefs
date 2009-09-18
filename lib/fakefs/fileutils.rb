@@ -2,6 +2,11 @@ module FakeFS
   module FileUtils
     extend self
 
+    (RealFileUtils.constants).map{|c| [c, RealFileUtils.const_get(c)]}.
+      reject{|c,val| val.is_a?(Module)}.each do |name, val|
+      const_set(name, val)
+    end
+
     def mkdir_p(path)
       FileSystem.add(path, FakeDir.new)
     end

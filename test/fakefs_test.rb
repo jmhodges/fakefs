@@ -532,6 +532,27 @@ class FakeFSTest < Test::Unit::TestCase
     }
   end
 
+  def self.get_constants(mod, except=[])
+    (mod.constants - except).map{|c| [c, mod.const_get(c)] }.
+      reject{|c,val| val.is_a?(Module) }
+  end
+
+  get_constants(RealFile, ["PATH_SEPARATOR"]).each do |name, value|
+    define_method("test_File_#{name}_constant") do
+      assert File.const_defined?(name), "File::#{name} is not defined"
+      assert_equal value, File.const_get(name), "File::#{name} is not equal to the original"
+    end
+  end
+
+  get_constants(RealFileUtils).each do |name, value|
+    define_method("test_FileUtils_#{name}_constant") do
+      assert FileUtils.const_defined?(name), "FileUtils::#{name} is not defined"
+      assert_equal value, FileUtils.const_get(name), "FileUtils::#{name} is not equal to the original"
+    end
+  end
+
+  private
+
   def here(fname)
     RealFile.expand_path(RealFile.dirname(__FILE__)+'/'+fname)
   end
